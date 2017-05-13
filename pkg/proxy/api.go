@@ -12,7 +12,7 @@ import (
 const (
 	APIPathRunQuery    = "/run"
 	APIPathStatusQuery = "/status"
-	APIPathStopQuery   = "/stop"
+	APIPathKillQuery   = "/kill"
 )
 
 // API serves the proxy API
@@ -44,8 +44,8 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handleRunQuery(w, r)
 	case method == "GET" && path == APIPathStatusQuery:
 		a.handleStatusQuery(w, r)
-	case method == "GET" && path == APIPathStopQuery:
-		a.handleStopQuery(w, r)
+	case method == "GET" && path == APIPathKillQuery:
+		a.handleKillQuery(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -112,7 +112,7 @@ func (a *API) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
 	qr.EncodeTo(w)
 }
 
-func (a *API) handleStopQuery(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleKillQuery(w http.ResponseWriter, r *http.Request) {
 	// useful metrics
 	begin := time.Now()
 

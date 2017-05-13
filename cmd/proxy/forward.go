@@ -52,8 +52,14 @@ func runForward(args []string) error {
 			return err
 		}
 	} else if flagset.NFlag() == 0 {
-		// Nothing found in pipe, which means nothing via flags.
-		return errors.New("specify at least one agent address as an argument")
+		if len(args) == 0 {
+			// Nothing found in pipe, which means nothing via flags.
+			return errors.New("specify at least one agent address as an argument")
+		}
+		// This follows the specs closely.
+		for _, v := range args {
+			agents.Set(v)
+		}
 	}
 
 	// Logging.
@@ -94,9 +100,9 @@ func runForward(args []string) error {
 	// Create proxy peer agents.
 	peers := make([]*peer.Peer, agents.Len())
 	for i := 0; i < agents.Len(); i++ {
-		_, agentAddr, err := parseAddr(agents[i], defaultAgentAPIPort)
-		if err != nil {
-			return err
+		_, agentAddr, e := parseAddr(agents[i], defaultAgentAPIPort)
+		if e != nil {
+			return e
 		}
 
 		peers[i] = peer.NewPeer(

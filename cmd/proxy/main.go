@@ -65,16 +65,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	var cmd command
+	var (
+		cmd    command
+		offset = 2
+	)
 	switch strings.ToLower(os.Args[1]) {
 	case "forward":
 		cmd = runForward
 	case "agents":
 		cmd = runAgents
 	default:
-		usage()
-		os.Exit(1)
+		if len(os.Args) == 1 {
+			usage()
+			os.Exit(1)
+		}
+		offset = 1
+		cmd = runForward
 	}
 
-	cmd.Run(os.Args[2:])
+	cmd.Run(os.Args[offset:])
 }

@@ -71,7 +71,7 @@ func TestAPI(t *testing.T) {
 		}
 	})
 
-	t.Run("stop", func(t *testing.T) {
+	t.Run("kill", func(t *testing.T) {
 		fn := func(s test.ASCII) bool {
 			resp, err := http.Get(fmt.Sprintf("%s/run?client_id=0&info=%s&mode=parallel&failonerror=false", url, s.String()))
 			if err != nil {
@@ -88,7 +88,7 @@ func TestAPI(t *testing.T) {
 			}
 
 			taskID := string(bytes)
-			resp, err = http.Get(fmt.Sprintf("%s/stop?task_id=%s", url, taskID))
+			resp, err = http.Get(fmt.Sprintf("%s/kill?task_id=%s", url, taskID))
 			if err != nil {
 				t.Error(err)
 			}
