@@ -34,6 +34,7 @@ func ParseModeType(s string) (ModeType, error) {
 	}
 }
 
+// Scheduler runs Tasks against each peer.
 type Scheduler struct {
 	mutex  sync.Mutex
 	peers  []*peer.Peer
@@ -88,7 +89,7 @@ func (s *Scheduler) Get(id string) (*Task, bool) {
 // Run the scheduler, which in turn will execute the following tasks.
 // Tasks scheduled are run as FIFO for both sequential and parallel jobs.
 func (s *Scheduler) Run() {
-	step := time.NewTicker(100 * time.Millisecond)
+	step := time.NewTicker(10 * time.Millisecond)
 	defer step.Stop()
 
 	for {
@@ -167,9 +168,9 @@ func (s *Scheduler) sequential(task *Task) {
 			return
 		}
 		task.SetStatus(TaskStatusTypeRequesting)
-		task.cancelFns = append(task.cancelFns, req.Cancel)
+		task.addCancelFn(req.Cancel)
 
-		level.Info(s.logger).Log("task", task.ID(), "request", req.URL())
+		level.Debug(s.logger).Log("task", task.ID(), "request", req.URL())
 
 		// Check that we've got a valid result.
 		resp, err := req.Do()
@@ -179,6 +180,9 @@ func (s *Scheduler) sequential(task *Task) {
 				task.SetStatus(TaskStatusTypeErrored)
 				return
 			}
+		}
+		if resp == nil {
+			return
 		}
 		if resp.StatusCode != http.StatusOK {
 			level.Warn(s.logger).Log("status", resp.Status)
@@ -194,5 +198,64 @@ func (s *Scheduler) sequential(task *Task) {
 }
 
 func (s *Scheduler) parallel(task *Task) {
+	// Wait for everything
+	var wg sync.WaitGroup
+	wg.Add(len(s.peers))
 
+	// Locate if there are any errors.
+	errs := make(chan error)
+
+	for i := 0; i < len(s.peers); i++ {
+		// Something has changed, before scheduled work or if it's happening
+		// mid-flight between requests.
+		if task.CancelledOrErrored() {
+			return
+		}
+
+		p := s.peers[(i+task.ClientID())%len(s.peers)]
+		task.SetStatus(TaskStatusTypeRequesting)
+
+		go func(p *peer.Peer, failOnError bool) {
+			defer wg.Done()
+
+			req, err := p.NewRequest(task.Info())
+			if err != nil {
+				level.Error(s.logger).Log("task", task.ID(), "err", err)
+				return
+			}
+			task.addCancelFn(req.Cancel)
+
+			level.Debug(s.logger).Log("task", task.ID(), "request", req.URL())
+
+			// Check that we've got a valid result.
+			resp, err := req.Do()
+			if err != nil {
+				level.Warn(s.logger).Log("err", err)
+				if failOnError {
+					errs <- err
+					return
+				}
+			}
+			if resp == nil {
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				level.Warn(s.logger).Log("status", resp.Status)
+				if failOnError {
+					errs <- err
+					return
+				}
+			}
+			level.Debug(s.logger).Log("status", resp.Status)
+		}(p, task.FailOnError())
+	}
+
+	go func() { wg.Wait(); close(errs) }()
+
+	for range errs {
+		task.SetStatus(TaskStatusTypeErrored)
+		return
+	}
+
+	task.SetStatus(TaskStatusTypeCompleted)
 }

@@ -109,7 +109,6 @@ func runAgents(args []string) error {
 
 			return brokers.Serve()
 		}, func(error) {
-			fmt.Println("CLOSE")
 			brokers.Close()
 		})
 	}
