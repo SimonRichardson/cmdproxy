@@ -17,6 +17,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "MODES\n")
 	fmt.Fprintf(os.Stderr, "  forward      Forwarding agent\n")
+	fmt.Fprintf(os.Stderr, "  agents       Create agents for forwarding\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "VERSION\n")
 	fmt.Fprintf(os.Stderr, "  %s (%s)\n", version, runtime.Version())
@@ -50,7 +51,8 @@ func (c command) Run(args []string) {
 }
 
 const (
-	defaultAPIPort = 7650
+	defaultAPIPort      = 7650
+	defaultAgentAPIPort = 8080
 )
 
 var (
@@ -67,6 +69,8 @@ func main() {
 	switch strings.ToLower(os.Args[1]) {
 	case "forward":
 		cmd = runForward
+	case "agents":
+		cmd = runAgents
 	default:
 		usage()
 		os.Exit(1)

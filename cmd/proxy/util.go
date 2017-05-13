@@ -20,6 +20,10 @@ func (s *stringSlice) Set(v string) error {
 	return nil
 }
 
+func (s *stringSlice) Len() int {
+	return len(*s)
+}
+
 func (s *stringSlice) String() string {
 	if len(*s) <= 0 {
 		return "..."
@@ -41,10 +45,22 @@ func interrupt(cancel <-chan struct{}) error {
 // "udp://host:1234", 80 => udp host:1234 host 1234
 // "host:1234", 80       => tcp host:1234 host 1234
 // "host", 80            => tcp host:80   host 80
-func parseAddr(addr string, defaultPort int) (network, address, host string, port int, err error) {
+func parseAddr(addr string, defaultPort int) (network, address string, err error) {
 	u, err := url.Parse(strings.ToLower(addr))
 	if err != nil {
-		return network, address, host, port, err
+		// It's possible that we're dealing with IPv6 localhost here!
+		if strings.HasPrefix(addr, "[::]") {
+			_, port, e := net.SplitHostPort(addr)
+			if e != nil {
+				return network, address, e
+			}
+			if port == "" {
+				port = strconv.Itoa(defaultPort)
+			}
+			return "tcp", fmt.Sprintf("0.0.0.0:%s", port), nil
+		}
+
+		return network, address, err
 	}
 
 	switch {
@@ -57,17 +73,8 @@ func parseAddr(addr string, defaultPort int) (network, address, host string, por
 			u.Host = net.JoinHostPort(u.Host, strconv.Itoa(defaultPort))
 		}
 	default:
-		return network, address, host, port, errors.Errorf("%s: unsupported address format", addr)
+		return network, address, errors.Errorf("%s: unsupported address format", addr)
 	}
 
-	host, portStr, err := net.SplitHostPort(u.Host)
-	if err != nil {
-		return network, address, host, port, err
-	}
-	port, err = strconv.Atoi(portStr)
-	if err != nil {
-		return network, address, host, port, err
-	}
-
-	return u.Scheme, u.Host, host, port, nil
+	return u.Scheme, u.Host, nil
 }
