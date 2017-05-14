@@ -150,5 +150,6 @@ Possible improvements:
  - Better support for agents, including use of something like coordination free
  member management i.e. hashicorp/serf or hashicorp/memberslist
  - Storing the tasks in a KVS so that the proxy REST API can it self be
- distributed. That way any scheduler can from any proxy can work on tasks. This
- way if a proxy REST API goes down, the tasks can still be processed.
+ distributed. That way any proxy scheduler from any proxy can work on tasks of
+ other proxies. If a proxy REST API was to go down, the tasks can still be
+ processed or even retried if a scheduler did go down.
