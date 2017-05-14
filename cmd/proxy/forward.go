@@ -146,7 +146,7 @@ func runForward(args []string) error {
 				}
 			}()
 
-			mux.Handle("/proxy/", http.StripPrefix("/proxy", api))
+			mux.Handle("/", api)
 
 			return http.Serve(apiListener, mux)
 		}, func(error) {
