@@ -43,7 +43,7 @@ See the diagram bellow to better understand the architecture:
             +-------------+
 ```
 
-### Agent
+### Agents
 
 To help better test the command proxy cli (see bellow), the cli can generate
 any number of agents that can be fed into the proxy forwarding cli for it to
@@ -84,7 +84,7 @@ FLAGS
   -output.prefix -agents       output prefix defines what prefixes should be used for output.addresses
 ```
 
-### Proxy (forward)
+### Proxy
 
 Proxy command takes a series of agent urls and allows a series of REST API
 calls to work with the agents (see above).
