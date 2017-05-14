@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"net"
-
 	"net/http"
 
 	"github.com/SimonRichardson/cmdproxy/pkg/group"

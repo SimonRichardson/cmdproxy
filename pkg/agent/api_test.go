@@ -12,6 +12,8 @@ import (
 )
 
 func TestAPI(t *testing.T) {
+	t.Parallel()
+
 	var (
 		api    = NewAPI(0, log.NewNopLogger())
 		server = httptest.NewServer(api)

@@ -41,8 +41,10 @@ func (qp *RunQueryParams) DecodeFrom(u *url.URL, rb queryBehaviour) error {
 
 	// Optional
 	failOnError := u.Query().Get("failonerror")
-	if qp.FailOnError, err = strconv.ParseBool(failOnError); err != nil {
-		return errors.New("Error reading/parsing 'failOnError' (required) query.")
+	if failOnError != "" {
+		if qp.FailOnError, err = strconv.ParseBool(failOnError); err != nil {
+			return errors.New("Error reading/parsing 'failOnError' (required) query.")
+		}
 	}
 
 	return nil

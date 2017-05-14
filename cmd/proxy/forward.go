@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 
 	"strings"
 
@@ -82,21 +81,6 @@ func runForward(args []string) error {
 		return err
 	}
 
-	// Create a client that is reusable by the peer clients.
-	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			ResponseHeaderTimeout: 5 * time.Second,
-			Dial: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout: 10 * time.Second,
-			DisableKeepAlives:   false,
-			MaxIdleConnsPerHost: 1,
-		},
-	}
-
 	// Create proxy peer agents.
 	peers := make([]*peer.Peer, agents.Len())
 	for i := 0; i < agents.Len(); i++ {
@@ -106,7 +90,7 @@ func runForward(args []string) error {
 		}
 
 		peers[i] = peer.NewPeer(
-			client,
+			http.DefaultClient,
 			"http",
 			agentAddr,
 			log.With(logger, "component", "peer"),

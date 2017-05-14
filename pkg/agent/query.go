@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 
@@ -35,21 +34,12 @@ const (
 type QueryResult struct {
 	Params   QueryParams `json:"query"`
 	Duration string      `json:"duration"`
-
-	Records io.ReadCloser
 }
 
 // EncodeTo encodes the QueryResult to the HTTP response writer.
 func (qr *QueryResult) EncodeTo(w http.ResponseWriter) {
 	w.Header().Set(httpHeaderInfo, qr.Params.Info)
 	w.Header().Set(httpHeaderDuration, qr.Duration)
-
-	if qr.Records != nil {
-		// CopbyBuffer can be useful for complex query pipelines.
-		buf := make([]byte, 1024)
-		io.CopyBuffer(w, qr.Records, buf)
-		qr.Records.Close()
-	}
 }
 
 const (
