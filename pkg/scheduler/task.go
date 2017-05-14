@@ -25,7 +25,7 @@ type Task struct {
 func NewTask(mode ModeType, clientID int, info string, failOnError bool) *Task {
 	return &Task{
 		mutex:       sync.Mutex{},
-		id:          uuid.NewUUID().String(),
+		id:          uuid.New(),
 		mode:        mode,
 		clientID:    clientID,
 		info:        info,
