@@ -25,7 +25,7 @@ func runForward(args []string) error {
 		flagset = flag.NewFlagSet("forward", flag.ExitOnError)
 
 		debug   = flagset.Bool("debug", false, "debug logging")
-		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for store API")
+		apiAddr = flagset.String("api", defaultAPIAddr, "listen address for proxy API")
 
 		agents = stringSlice{}
 	)

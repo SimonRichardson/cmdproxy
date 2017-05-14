@@ -130,6 +130,19 @@ proxy agents -output.prefix=""
 proxy [::]:49834 [::]:49835 [::]:49836
 ```
 
+Different proxy CLI flags can be found using the following command:
+
+```
+proxy forward -help
+USAGE
+  forward [flags]
+
+FLAGS
+  -agents ...              agent host host:peer (repeatable)
+  -api tcp://0.0.0.0:7650  listen address for proxy API
+  -debug false             debug logging
+```
+
 ## Improvements
 
 Possible improvements:
