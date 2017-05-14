@@ -194,7 +194,10 @@ func (s *Scheduler) sequential(task *Task) {
 		level.Debug(s.logger).Log("status", resp.Status)
 	}
 
-	task.SetStatus(TaskStatusTypeCompleted)
+	// Make sure we only change to completed if we're still requesting.
+	if task.Status() == TaskStatusTypeRequesting {
+		task.SetStatus(TaskStatusTypeCompleted)
+	}
 }
 
 func (s *Scheduler) parallel(task *Task) {
@@ -257,5 +260,8 @@ func (s *Scheduler) parallel(task *Task) {
 		return
 	}
 
-	task.SetStatus(TaskStatusTypeCompleted)
+	// Make sure we only change to completed if we're still requesting.
+	if task.Status() == TaskStatusTypeRequesting {
+		task.SetStatus(TaskStatusTypeCompleted)
+	}
 }
