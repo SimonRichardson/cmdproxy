@@ -30,7 +30,7 @@ func NewTask(mode ModeType, clientID int, info string, failOnError bool) *Task {
 		clientID:    clientID,
 		info:        info,
 		failOnError: failOnError,
-		status:      TaskStatusTypePending,
+		status:      TaskStatusTypeInitial,
 	}
 }
 
@@ -99,7 +99,10 @@ func (t *Task) addCancelFn(fn context.CancelFunc) {
 type TaskStatusType string
 
 const (
-	// TaskStatusTypePending defines the initial state of the task.
+	// TaskStatusTypeInitial defines the initial state of the task.
+	TaskStatusTypeInitial TaskStatusType = "initial"
+
+	// TaskStatusTypePending defines that the Task pending to be worked on.
 	TaskStatusTypePending TaskStatusType = "pending"
 
 	// TaskStatusTypeRequesting labels the Task when it's requesting.

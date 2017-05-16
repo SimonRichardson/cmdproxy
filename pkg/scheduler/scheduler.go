@@ -3,6 +3,7 @@ package scheduler
 import (
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SimonRichardson/cmdproxy/pkg/peer"
@@ -41,6 +42,7 @@ type Scheduler struct {
 	logger log.Logger
 	tasks  []*Task
 	stop   chan chan struct{}
+	clock  *Clock
 }
 
 // NewScheduler creates a new scheduler, which allows tasks to be mapped over
@@ -52,6 +54,7 @@ func NewScheduler(peers []*peer.Peer, logger log.Logger) *Scheduler {
 		logger: logger,
 		tasks:  make([]*Task, 0),
 		stop:   make(chan chan struct{}),
+		clock:  NewClock(),
 	}
 }
 
@@ -89,7 +92,8 @@ func (s *Scheduler) Get(id string) (*Task, bool) {
 // Run the scheduler, which in turn will execute the following tasks.
 // Tasks scheduled are run as FIFO for both sequential and parallel jobs.
 func (s *Scheduler) Run() {
-	step := time.NewTicker(10 * time.Millisecond)
+	// Scheduler batches up all tasks.
+	step := time.NewTicker(1 * time.Millisecond)
 	defer step.Stop()
 
 	for {
@@ -117,41 +121,56 @@ func (s *Scheduler) Peers() []*peer.Peer {
 }
 
 func (s *Scheduler) step() {
-	var task *Task
+	// Get a series of tasks to work on.
+	var (
+		tasks []*Task
+	)
 
+	// Lock to make sure that we don't get any more tasks, whilst we're still
+	// trying to workout what to work on.
 	s.mutex.Lock()
 	for _, v := range s.tasks {
-		if v.Status() == TaskStatusTypePending {
-			task = v
-			break
+		// Initial state says that it's not actively been worked on, nor has it
+		// be scheduled.
+		if v.Status() == TaskStatusTypeInitial {
+			tasks = append(tasks, v)
+			v.SetStatus(TaskStatusTypePending)
 		}
 	}
 	s.mutex.Unlock()
 
 	// Nothing to work on, we're done.
-	if task == nil {
+	if len(tasks) < 0 {
 		return
 	}
 
+	// Go execute the various task requests.
+	for _, t := range tasks {
+		// Wrap the strategies in a simple runner.
+		go run(s.peers, t, s.logger)
+	}
+}
+
+func run(peers []*peer.Peer, task *Task, logger log.Logger) {
 	// Depending on the task mode, let's pick which strategy to actually use.
 	var strat strategy
 	switch task.Mode() {
 	case ModeTypeSequential:
-		strat = s.sequential
+		strat = sequential
 	case ModeTypeParallel:
-		strat = s.parallel
+		strat = parallel
 	default:
 		panic(errors.New("invalid mode type"))
 	}
 
 	// Run the strategy over the task.
-	strat(task)
+	strat(peers, task, logger)
 }
 
-type strategy func(*Task)
+type strategy func([]*peer.Peer, *Task, log.Logger)
 
-func (s *Scheduler) sequential(task *Task) {
-	for i := 0; i < len(s.peers); i++ {
+func sequential(peers []*peer.Peer, task *Task, logger log.Logger) {
+	for i := 0; i < len(peers); i++ {
 		// Something has changed, before scheduled work or if it's happening
 		// mid-flight between requests.
 		if task.CancelledOrErrored() {
@@ -159,23 +178,23 @@ func (s *Scheduler) sequential(task *Task) {
 		}
 
 		var (
-			peer     = s.peers[(i+task.ClientID())%len(s.peers)]
+			peer     = peers[(i+task.ClientID())%len(peers)]
 			req, err = peer.NewRequest(task.Info())
 		)
 		if err != nil {
 			task.SetStatus(TaskStatusTypeErrored)
-			level.Error(s.logger).Log("task", task.ID(), "err", err)
+			level.Error(logger).Log("task", task.ID(), "err", err)
 			return
 		}
 		task.SetStatus(TaskStatusTypeRequesting)
 		task.addCancelFn(req.Cancel)
 
-		level.Debug(s.logger).Log("task", task.ID(), "request", req.URL())
+		level.Debug(logger).Log("task", task.ID(), "request", req.URL())
 
 		// Check that we've got a valid result.
 		resp, err := req.Do()
 		if err != nil {
-			level.Warn(s.logger).Log("err", err)
+			level.Warn(logger).Log("err", err)
 			if task.FailOnError() {
 				task.SetStatus(TaskStatusTypeErrored)
 				return
@@ -185,13 +204,13 @@ func (s *Scheduler) sequential(task *Task) {
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
-			level.Warn(s.logger).Log("status", resp.Status)
+			level.Warn(logger).Log("status", resp.Status)
 			if task.FailOnError() {
 				task.SetStatus(TaskStatusTypeErrored)
 				return
 			}
 		}
-		level.Debug(s.logger).Log("status", resp.Status)
+		level.Debug(logger).Log("status", resp.Status)
 	}
 
 	// Make sure we only change to completed if we're still requesting.
@@ -200,22 +219,22 @@ func (s *Scheduler) sequential(task *Task) {
 	}
 }
 
-func (s *Scheduler) parallel(task *Task) {
+func parallel(peers []*peer.Peer, task *Task, logger log.Logger) {
 	// Wait for everything
 	var wg sync.WaitGroup
-	wg.Add(len(s.peers))
+	wg.Add(len(peers))
 
 	// Locate if there are any errors.
 	errs := make(chan error)
 
-	for i := 0; i < len(s.peers); i++ {
+	for i := 0; i < len(peers); i++ {
 		// Something has changed, before scheduled work or if it's happening
 		// mid-flight between requests.
 		if task.CancelledOrErrored() {
 			return
 		}
 
-		p := s.peers[(i+task.ClientID())%len(s.peers)]
+		p := peers[(i+task.ClientID())%len(peers)]
 		task.SetStatus(TaskStatusTypeRequesting)
 
 		go func(p *peer.Peer, failOnError bool) {
@@ -223,17 +242,17 @@ func (s *Scheduler) parallel(task *Task) {
 
 			req, err := p.NewRequest(task.Info())
 			if err != nil {
-				level.Error(s.logger).Log("task", task.ID(), "err", err)
+				level.Error(logger).Log("task", task.ID(), "err", err)
 				return
 			}
 			task.addCancelFn(req.Cancel)
 
-			level.Debug(s.logger).Log("task", task.ID(), "request", req.URL())
+			level.Debug(logger).Log("task", task.ID(), "request", req.URL())
 
 			// Check that we've got a valid result.
 			resp, err := req.Do()
 			if err != nil {
-				level.Warn(s.logger).Log("err", err)
+				level.Warn(logger).Log("err", err)
 				if failOnError {
 					errs <- err
 					return
@@ -243,13 +262,13 @@ func (s *Scheduler) parallel(task *Task) {
 				return
 			}
 			if resp.StatusCode != http.StatusOK {
-				level.Warn(s.logger).Log("status", resp.Status)
+				level.Warn(logger).Log("status", resp.Status)
 				if failOnError {
 					errs <- err
 					return
 				}
 			}
-			level.Debug(s.logger).Log("status", resp.Status)
+			level.Debug(logger).Log("status", resp.Status)
 		}(p, task.FailOnError())
 	}
 
@@ -264,4 +283,24 @@ func (s *Scheduler) parallel(task *Task) {
 	if task.Status() == TaskStatusTypeRequesting {
 		task.SetStatus(TaskStatusTypeCompleted)
 	}
+}
+
+// Clock defines a metric for monitoring how many times something occurred.
+type Clock struct {
+	times int64
+}
+
+// NewClock creates a Clock
+func NewClock() *Clock {
+	return &Clock{0}
+}
+
+// Increment a clock timing
+func (c *Clock) Increment() {
+	atomic.AddInt64(&c.times, 1)
+}
+
+// Time returns how much movement the clock has changed.
+func (c *Clock) Time() int64 {
+	return atomic.LoadInt64(&c.times)
 }
